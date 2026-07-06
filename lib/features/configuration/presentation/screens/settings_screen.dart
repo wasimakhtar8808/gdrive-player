@@ -14,6 +14,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _apiKeyController;
   late TextEditingController _tokenController;
+  late TextEditingController _clientIdController;
 
   @override
   void initState() {
@@ -21,12 +22,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final configProvider = Provider.of<ConfigProvider>(context, listen: false);
     _apiKeyController = TextEditingController(text: configProvider.tokens.apiKey);
     _tokenController = TextEditingController(text: configProvider.tokens.accessToken);
+    _clientIdController = TextEditingController(text: configProvider.tokens.serverClientId);
   }
 
   @override
   void dispose() {
     _apiKeyController.dispose();
     _tokenController.dispose();
+    _clientIdController.dispose();
     super.dispose();
   }
 
@@ -54,6 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await configProvider.saveConfig(
       _apiKeyController.text,
       _tokenController.text,
+      _clientIdController.text,
     );
 
     if (mounted) {
@@ -70,6 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await configProvider.saveConfig(
       _apiKeyController.text,
       _tokenController.text,
+      _clientIdController.text,
     );
 
     final success = await configProvider.testConnection();
@@ -97,6 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await configProvider.clearConfig();
     _apiKeyController.clear();
     _tokenController.clear();
+    _clientIdController.clear();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Configuration cleared.')),
@@ -296,6 +302,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           prefixIcon: Icon(Icons.key, color: Colors.orange),
                         ),
                         style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _clientIdController,
+                        maxLines: 2,
+                        minLines: 1,
+                        decoration: const InputDecoration(
+                          labelText: 'Google OAuth Client ID (for Android Login)',
+                          hintText: 'Enter Web Client ID from GCP Console',
+                          prefixIcon: Icon(Icons.badge, color: Colors.orange),
+                        ),
+                        style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
                       ),
                       const SizedBox(height: 16),
                       TextFormField(

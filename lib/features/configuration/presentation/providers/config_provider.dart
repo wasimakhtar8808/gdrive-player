@@ -19,6 +19,7 @@ class ConfigProvider with ChangeNotifier {
   ConnectionStatus _connectionStatus = ConnectionStatus.idle;
   String _errorMessage = '';
   GoogleSignInAccount? _googleAccount;
+  bool _isListenerRegistered = false;
 
   TokenEntity get tokens => _tokens;
   bool get isLoading => _isLoading;
@@ -30,52 +31,63 @@ class ConfigProvider with ChangeNotifier {
   Future<void> _init() async {
     _tokens = await _repository.loadTokens();
 
-    // Initialize GoogleSignIn and register authentication state listener
-    try {
-      await GoogleSignIn.instance.initialize();
-      
-      GoogleSignIn.instance.authenticationEvents.listen((event) async {
-        if (event is GoogleSignInAuthenticationEventSignIn) {
-          _googleAccount = event.user;
-          final scopes = ['https://www.googleapis.com/auth/drive.readonly'];
-          
-          try {
-            var auth = await _googleAccount!.authorizationClient.authorizationForScopes(scopes);
-            auth ??= await _googleAccount!.authorizationClient.authorizeScopes(scopes);
-            final accessToken = auth.accessToken;
-            
-            if (accessToken.isNotEmpty) {
-              _tokens = _tokens.copyWith(accessToken: accessToken);
-              await _repository.saveTokens(_tokens);
-              _connectionStatus = ConnectionStatus.connected;
-              notifyListeners();
-            }
-          } catch (_) {
-            // Error fetching scopes in background stream listener
-          }
-        } else if (event is GoogleSignInAuthenticationEventSignOut) {
-          _googleAccount = null;
-          await clearConfig();
-        }
-      });
-
-      // Silently request lightweight authentication to recover session
-      await GoogleSignIn.instance.attemptLightweightAuthentication();
-    } catch (_) {
-      // Ignore initialization errors on boot
+    // If client ID is already saved, silently authenticate to recover session
+    if (_tokens.hasClientId) {
+      try {
+        await GoogleSignIn.instance.initialize(serverClientId: _tokens.serverClientId);
+        _setupGoogleSignInListener();
+        await GoogleSignIn.instance.attemptLightweightAuthentication();
+      } catch (_) {
+        // Ignore initialization errors on boot
+      }
     }
 
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> saveConfig(String apiKey, String accessToken) async {
+  void _setupGoogleSignInListener() {
+    if (_isListenerRegistered) return;
+    
+    GoogleSignIn.instance.authenticationEvents.listen((event) async {
+      if (event is GoogleSignInAuthenticationEventSignIn) {
+        _googleAccount = event.user;
+        final scopes = ['https://www.googleapis.com/auth/drive.readonly'];
+        
+        try {
+          var auth = await _googleAccount!.authorizationClient.authorizationForScopes(scopes);
+          auth ??= await _googleAccount!.authorizationClient.authorizeScopes(scopes);
+          final accessToken = auth.accessToken;
+          
+          if (accessToken.isNotEmpty) {
+            _tokens = _tokens.copyWith(accessToken: accessToken);
+            await _repository.saveTokens(_tokens);
+            _connectionStatus = ConnectionStatus.connected;
+            notifyListeners();
+          }
+        } catch (_) {
+          // Error fetching scopes in background stream listener
+        }
+      } else if (event is GoogleSignInAuthenticationEventSignOut) {
+        _googleAccount = null;
+        await clearConfig();
+      }
+    });
+
+    _isListenerRegistered = true;
+  }
+
+  Future<void> saveConfig(String apiKey, String accessToken, String serverClientId) async {
     _isLoading = true;
     _connectionStatus = ConnectionStatus.idle;
     _errorMessage = '';
     notifyListeners();
 
-    _tokens = TokenEntity(apiKey: apiKey, accessToken: accessToken);
+    _tokens = TokenEntity(
+      apiKey: apiKey,
+      accessToken: accessToken,
+      serverClientId: serverClientId,
+    );
     await _repository.saveTokens(_tokens);
     _isLoading = false;
     notifyListeners();
@@ -95,12 +107,23 @@ class ConfigProvider with ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() async {
+    if (!_tokens.hasClientId) {
+      _connectionStatus = ConnectionStatus.failed;
+      _errorMessage = 'Google OAuth Client ID must be configured in Settings first.';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _connectionStatus = ConnectionStatus.testing;
     _errorMessage = '';
     notifyListeners();
 
     try {
+      // Re-initialize to ensure it uses the latest client ID configuration
+      await GoogleSignIn.instance.initialize(serverClientId: _tokens.serverClientId);
+      _setupGoogleSignInListener();
+
       final GoogleSignInAccount? account = await GoogleSignIn.instance.authenticate();
       if (account != null) {
         final scopes = ['https://www.googleapis.com/auth/drive.readonly'];
@@ -147,7 +170,7 @@ class ConfigProvider with ChangeNotifier {
   Future<bool> testConnection() async {
     if (_tokens.isEmpty) {
       _connectionStatus = ConnectionStatus.failed;
-      _errorMessage = 'Both API Key and Access Token are empty.';
+      _errorMessage = 'API Key, Access Token and Client ID are empty.';
       notifyListeners();
       return false;
     }
