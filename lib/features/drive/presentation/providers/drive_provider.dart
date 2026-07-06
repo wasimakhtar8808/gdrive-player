@@ -1,0 +1,137 @@
+import 'package:flutter/material.dart';
+import '../../../configuration/domain/entities/token_entity.dart';
+import '../../domain/entities/drive_item.dart';
+import '../../domain/repositories/drive_repository.dart';
+
+class FolderBreadcrumb {
+  final String id;
+  final String name;
+
+  FolderBreadcrumb({required this.id, required this.name});
+}
+
+class StreamSource {
+  final String url;
+  final Map<String, String> headers;
+  final String title;
+
+  StreamSource({
+    required this.url,
+    required this.headers,
+    required this.title,
+  });
+}
+
+class DriveProvider with ChangeNotifier {
+  final DriveRepository _repository;
+
+  DriveProvider(this._repository);
+
+  List<DriveItem> _items = [];
+  bool _isLoading = false;
+  String _errorMessage = '';
+  bool _isGridView = false;
+  
+  final List<FolderBreadcrumb> _breadcrumbs = [
+    FolderBreadcrumb(id: 'root', name: 'My Drive')
+  ];
+
+  List<DriveItem> get items => _items;
+  bool get isLoading => _isLoading;
+  String get errorMessage => _errorMessage;
+  bool get isGridView => _isGridView;
+  List<FolderBreadcrumb> get breadcrumbs => _breadcrumbs;
+  
+  String get currentFolderId => _breadcrumbs.last.id;
+  String get currentFolderName => _breadcrumbs.last.name;
+
+  void toggleViewMode() {
+    _isGridView = !_isGridView;
+    notifyListeners();
+  }
+
+  Future<void> loadCurrentFolder(TokenEntity token) async {
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      final results = await _repository.getDriveContents(
+        folderId: currentFolderId,
+        token: token,
+      );
+      _items = results;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _items = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> navigateToFolder(DriveItem folder, TokenEntity token) async {
+    if (!folder.isFolder) return;
+    
+    _breadcrumbs.add(FolderBreadcrumb(id: folder.id, name: folder.name));
+    await loadCurrentFolder(token);
+  }
+
+  Future<void> navigateToBreadcrumbIndex(int index, TokenEntity token) async {
+    if (index < 0 || index >= _breadcrumbs.length) return;
+    
+    // Remove all levels after this index
+    _breadcrumbs.removeRange(index + 1, _breadcrumbs.length);
+    await loadCurrentFolder(token);
+  }
+
+  Future<void> navigateBack(TokenEntity token) async {
+    if (_breadcrumbs.length > 1) {
+      _breadcrumbs.removeLast();
+      await loadCurrentFolder(token);
+    }
+  }
+
+  Future<void> search(String query, TokenEntity token) async {
+    if (query.trim().isEmpty) {
+      await loadCurrentFolder(token);
+      return;
+    }
+
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      final results = await _repository.searchDrive(
+        query: query,
+        token: token,
+      );
+      _items = results;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _items = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  StreamSource getStreamSource(DriveItem item, TokenEntity token) {
+    final Map<String, String> headers = {};
+    String url;
+
+    if (token.hasAccessToken) {
+      headers['Authorization'] = 'Bearer ${token.accessToken}';
+      url = 'https://www.googleapis.com/drive/v3/files/${item.id}?alt=media';
+    } else {
+      url = 'https://www.googleapis.com/drive/v3/files/${item.id}?alt=media&key=${token.apiKey}';
+    }
+
+    return StreamSource(
+      url: url,
+      headers: headers,
+      title: item.name,
+    );
+  }
+}
