@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../domain/entities/token_entity.dart';
 import '../../domain/repositories/configuration_repository.dart';
 
@@ -19,24 +21,36 @@ class ConfigProvider with ChangeNotifier {
   ConnectionStatus _connectionStatus = ConnectionStatus.idle;
   String _errorMessage = '';
   GoogleSignInAccount? _googleAccount;
-  bool _isListenerRegistered = false;
+  User? _firebaseUser;
 
   TokenEntity get tokens => _tokens;
   bool get isLoading => _isLoading;
   ConnectionStatus get connectionStatus => _connectionStatus;
   String get errorMessage => _errorMessage;
   GoogleSignInAccount? get googleAccount => _googleAccount;
-  bool get isGoogleSignedIn => _googleAccount != null;
+  User? get firebaseUser => _firebaseUser;
+  bool get isGoogleSignedIn => _firebaseUser != null;
 
   Future<void> _init() async {
     _tokens = await _repository.loadTokens();
 
+    // Listen to Firebase Auth state changes
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      _firebaseUser = user;
+      notifyListeners();
+    });
+
     // If client ID is already saved, silently authenticate to recover session
     if (_tokens.hasClientId) {
       try {
-        await GoogleSignIn.instance.initialize(serverClientId: _tokens.serverClientId);
-        _setupGoogleSignInListener();
-        await GoogleSignIn.instance.attemptLightweightAuthentication();
+        await GoogleSignIn.instance.initialize(
+          clientId: kIsWeb ? _tokens.serverClientId : null,
+          serverClientId: _tokens.serverClientId,
+        );
+        final account = await GoogleSignIn.instance.attemptLightweightAuthentication();
+        if (account != null) {
+          await _handleGoogleSignInSuccess(account);
+        }
       } catch (_) {
         // Ignore initialization errors on boot
       }
@@ -46,35 +60,50 @@ class ConfigProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void _setupGoogleSignInListener() {
-    if (_isListenerRegistered) return;
+  Future<void> _handleGoogleSignInSuccess(GoogleSignInAccount account) async {
+    _googleAccount = account;
+    final scopes = ['https://www.googleapis.com/auth/drive.readonly'];
     
-    GoogleSignIn.instance.authenticationEvents.listen((event) async {
-      if (event is GoogleSignInAuthenticationEventSignIn) {
-        _googleAccount = event.user;
-        final scopes = ['https://www.googleapis.com/auth/drive.readonly'];
-        
-        try {
-          var auth = await _googleAccount!.authorizationClient.authorizationForScopes(scopes);
-          auth ??= await _googleAccount!.authorizationClient.authorizeScopes(scopes);
-          final accessToken = auth.accessToken;
-          
-          if (accessToken.isNotEmpty) {
-            _tokens = _tokens.copyWith(accessToken: accessToken);
-            await _repository.saveTokens(_tokens);
-            _connectionStatus = ConnectionStatus.connected;
-            notifyListeners();
-          }
-        } catch (_) {
-          // Error fetching scopes in background stream listener
-        }
-      } else if (event is GoogleSignInAuthenticationEventSignOut) {
-        _googleAccount = null;
-        await clearConfig();
-      }
-    });
+    var auth = await account.authorizationClient.authorizationForScopes(scopes);
+    auth ??= await account.authorizationClient.authorizeScopes(scopes);
+    final accessToken = auth.accessToken;
+    
+    if (accessToken.isNotEmpty) {
+      _tokens = _tokens.copyWith(accessToken: accessToken);
+      await _repository.saveTokens(_tokens);
+      
+      final googleAuth = account.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: accessToken,
+        idToken: googleAuth.idToken,
+      );
+      
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      _firebaseUser = userCredential.user;
+      _connectionStatus = ConnectionStatus.connected;
+    } else {
+      throw Exception('Failed to obtain Google Drive access token.');
+    }
+  }
 
-    _isListenerRegistered = true;
+  Future<bool> refreshAccessToken() async {
+    if (!_tokens.hasClientId) return false;
+    
+    try {
+      await GoogleSignIn.instance.initialize(
+        clientId: kIsWeb ? _tokens.serverClientId : null,
+        serverClientId: _tokens.serverClientId,
+      );
+      final account = await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (account != null) {
+        await _handleGoogleSignInSuccess(account);
+        notifyListeners();
+        return true;
+      }
+    } catch (_) {
+      // Ignore silent refresh errors
+    }
+    return false;
   }
 
   Future<void> saveConfig(String apiKey, String accessToken, String serverClientId) async {
@@ -102,6 +131,7 @@ class ConfigProvider with ChangeNotifier {
     _connectionStatus = ConnectionStatus.idle;
     _errorMessage = '';
     _googleAccount = null;
+    _firebaseUser = null;
     _isLoading = false;
     notifyListeners();
   }
@@ -121,23 +151,14 @@ class ConfigProvider with ChangeNotifier {
 
     try {
       // Re-initialize to ensure it uses the latest client ID configuration
-      await GoogleSignIn.instance.initialize(serverClientId: _tokens.serverClientId);
-      _setupGoogleSignInListener();
+      await GoogleSignIn.instance.initialize(
+        clientId: kIsWeb ? _tokens.serverClientId : null,
+        serverClientId: _tokens.serverClientId,
+      );
 
       final GoogleSignInAccount? account = await GoogleSignIn.instance.authenticate();
       if (account != null) {
-        final scopes = ['https://www.googleapis.com/auth/drive.readonly'];
-        
-        var auth = await account.authorizationClient.authorizationForScopes(scopes);
-        auth ??= await account.authorizationClient.authorizeScopes(scopes);
-
-        final accessToken = auth.accessToken;
-
-        _tokens = _tokens.copyWith(accessToken: accessToken);
-        await _repository.saveTokens(_tokens);
-
-        _googleAccount = account;
-        _connectionStatus = ConnectionStatus.connected;
+        await _handleGoogleSignInSuccess(account);
         _isLoading = false;
         notifyListeners();
         return true;
@@ -150,7 +171,12 @@ class ConfigProvider with ChangeNotifier {
       }
     } catch (e) {
       _connectionStatus = ConnectionStatus.failed;
-      _errorMessage = 'Sign in failed: ${e.toString()}';
+      final errorStr = e.toString();
+      if (errorStr.contains('ApiException: 10') || errorStr.contains('sign_in_failed') || errorStr.contains('10:')) {
+        _errorMessage = 'Sign in failed (Error 10): This usually means your app\'s package name or SHA-1 fingerprint is not registered in the Firebase/Google Developer Console, or the Client ID is incorrect.';
+      } else {
+        _errorMessage = 'Sign in failed: $errorStr';
+      }
       _isLoading = false;
       notifyListeners();
       return false;
@@ -162,8 +188,10 @@ class ConfigProvider with ChangeNotifier {
     notifyListeners();
     try {
       await GoogleSignIn.instance.signOut();
+      await FirebaseAuth.instance.signOut();
     } catch (_) {}
     _googleAccount = null;
+    _firebaseUser = null;
     await clearConfig();
   }
 

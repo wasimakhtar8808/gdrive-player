@@ -190,9 +190,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       configProvider.isGoogleSignedIn
                           ? Row(
                               children: [
-                                if (configProvider.googleAccount?.photoUrl != null)
+                                if (configProvider.firebaseUser?.photoURL != null)
                                   CircleAvatar(
-                                    backgroundImage: NetworkImage(configProvider.googleAccount!.photoUrl!),
+                                    backgroundImage: NetworkImage(configProvider.firebaseUser!.photoURL!),
                                     radius: 24,
                                   )
                                 else
@@ -207,12 +207,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        configProvider.googleAccount?.displayName ?? 'Connected User',
+                                        configProvider.firebaseUser?.displayName ?? 'Connected User',
                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        configProvider.googleAccount?.email ?? '',
+                                        configProvider.firebaseUser?.email ?? '',
                                         style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 13),
                                       ),
                                     ],

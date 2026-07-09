@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "gdrive-player (Flutter Redmi 8A Dual)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart"
+    },
+    {
+      "name": "gdrive-player",
+      "request": "launch",
+      "type": "dart"
+    }
+  ]
+}

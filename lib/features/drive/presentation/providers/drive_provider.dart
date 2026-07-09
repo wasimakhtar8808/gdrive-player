@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../configuration/domain/entities/token_entity.dart';
 import '../../domain/entities/drive_item.dart';
 import '../../domain/repositories/drive_repository.dart';
+import '../../../../core/errors/failures.dart';
 
 class FolderBreadcrumb {
   final String id;
@@ -50,7 +51,10 @@ class DriveProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadCurrentFolder(TokenEntity token) async {
+  Future<void> loadCurrentFolder(
+    TokenEntity token, {
+    Future<TokenEntity?> Function()? onAuthError,
+  }) async {
     _isLoading = true;
     _errorMessage = '';
     notifyListeners();
@@ -62,39 +66,74 @@ class DriveProvider with ChangeNotifier {
       );
       _items = results;
     } catch (e) {
-      _errorMessage = e.toString();
-      _items = [];
+      if (e is AuthFailure && onAuthError != null) {
+        final newToken = await onAuthError();
+        if (newToken != null) {
+          try {
+            final results = await _repository.getDriveContents(
+              folderId: currentFolderId,
+              token: newToken,
+            );
+            _items = results;
+            return;
+          } catch (retryException) {
+            _errorMessage = retryException.toString();
+            _items = [];
+          }
+        } else {
+          _errorMessage = 'Session expired. Please sign in again.';
+          _items = [];
+        }
+      } else {
+        _errorMessage = e.toString();
+        _items = [];
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> navigateToFolder(DriveItem folder, TokenEntity token) async {
+  Future<void> navigateToFolder(
+    DriveItem folder,
+    TokenEntity token, {
+    Future<TokenEntity?> Function()? onAuthError,
+  }) async {
     if (!folder.isFolder) return;
     
     _breadcrumbs.add(FolderBreadcrumb(id: folder.id, name: folder.name));
-    await loadCurrentFolder(token);
+    await loadCurrentFolder(token, onAuthError: onAuthError);
   }
 
-  Future<void> navigateToBreadcrumbIndex(int index, TokenEntity token) async {
+  Future<void> navigateToBreadcrumbIndex(
+    int index,
+    TokenEntity token, {
+    Future<TokenEntity?> Function()? onAuthError,
+  }) async {
     if (index < 0 || index >= _breadcrumbs.length) return;
     
     // Remove all levels after this index
     _breadcrumbs.removeRange(index + 1, _breadcrumbs.length);
-    await loadCurrentFolder(token);
+    await loadCurrentFolder(token, onAuthError: onAuthError);
   }
 
-  Future<void> navigateBack(TokenEntity token) async {
+  Future<void> navigateBack(
+    TokenEntity token, {
+    Future<TokenEntity?> Function()? onAuthError,
+  }) async {
     if (_breadcrumbs.length > 1) {
       _breadcrumbs.removeLast();
-      await loadCurrentFolder(token);
+      await loadCurrentFolder(token, onAuthError: onAuthError);
     }
   }
 
-  Future<void> search(String query, TokenEntity token) async {
+  Future<void> search(
+    String query,
+    TokenEntity token, {
+    Future<TokenEntity?> Function()? onAuthError,
+  }) async {
     if (query.trim().isEmpty) {
-      await loadCurrentFolder(token);
+      await loadCurrentFolder(token, onAuthError: onAuthError);
       return;
     }
 
@@ -109,8 +148,28 @@ class DriveProvider with ChangeNotifier {
       );
       _items = results;
     } catch (e) {
-      _errorMessage = e.toString();
-      _items = [];
+      if (e is AuthFailure && onAuthError != null) {
+        final newToken = await onAuthError();
+        if (newToken != null) {
+          try {
+            final results = await _repository.searchDrive(
+              query: query,
+              token: newToken,
+            );
+            _items = results;
+            return;
+          } catch (retryException) {
+            _errorMessage = retryException.toString();
+            _items = [];
+          }
+        } else {
+          _errorMessage = 'Session expired. Please sign in again.';
+          _items = [];
+        }
+      } else {
+        _errorMessage = e.toString();
+        _items = [];
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

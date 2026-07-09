@@ -29,5 +29,5 @@ class TokenEntity {
   const TokenEntity.empty()
       : apiKey = '',
         accessToken = '',
-        serverClientId = '';
+        serverClientId = '846250582150-sstsfrien7oeh9fih3ackdtu55l1ehlp.apps.googleusercontent.com';
 }

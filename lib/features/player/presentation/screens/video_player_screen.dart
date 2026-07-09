@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import '../../data/datasources/playback_tracker.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final String url;
@@ -48,6 +49,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   double _playbackSpeed = 1.0;
   bool _isLocked = false;
 
+  int _lastSavedSecond = 0;
+
+  String get _videoKey {
+    final regExp = RegExp(r'\/files\/([a-zA-Z0-9-_]+)');
+    final match = regExp.firstMatch(widget.url);
+    if (match != null && match.groupCount >= 1) {
+      return match.group(1)!;
+    }
+    return widget.url;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -75,15 +87,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       await _controller.initialize();
       _volume = _controller.value.volume;
       
-      // Auto play
-      await _controller.play();
-      
-      setState(() {
-        _isInitialized = true;
-      });
+      final savedSeconds = await PlaybackTracker.getPosition(_videoKey);
+      final duration = _controller.value.duration;
 
-      _controller.addListener(_onPlayerUpdate);
-      _startControlsTimer();
+      if (savedSeconds > 5 && savedSeconds < duration.inSeconds * 0.95) {
+        await _controller.pause();
+        setState(() {
+          _isInitialized = true;
+        });
+        if (mounted) {
+          _showResumeDialog(savedSeconds);
+        }
+      } else {
+        await _controller.play();
+        setState(() {
+          _isInitialized = true;
+        });
+        _controller.addListener(_onPlayerUpdate);
+        _startControlsTimer();
+      }
     } catch (e) {
       setState(() {
         _hasError = true;
@@ -92,16 +114,80 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
+  void _showResumeDialog(int savedSeconds) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Resume Playback?'),
+          content: Text(
+            'Would you like to resume playing this video from where you left off at ${_formatDuration(Duration(seconds: savedSeconds))}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _controller.seekTo(Duration.zero);
+                _controller.play();
+                _controller.addListener(_onPlayerUpdate);
+                _startControlsTimer();
+              },
+              child: const Text('Start Over'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _controller.seekTo(Duration(seconds: savedSeconds));
+                _controller.play();
+                _controller.addListener(_onPlayerUpdate);
+                _startControlsTimer();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Resume'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _onPlayerUpdate() {
-    if (mounted) {
-      setState(() {});
+    if (!mounted) return;
+    
+    final value = _controller.value;
+    if (value.isInitialized) {
+      final currentSecond = value.position.inSeconds;
+      if (value.isPlaying && (currentSecond - _lastSavedSecond).abs() >= 3) {
+        _lastSavedSecond = currentSecond;
+        PlaybackTracker.savePosition(_videoKey, currentSecond);
+      }
+      
+      if (value.position >= value.duration - const Duration(seconds: 5)) {
+        PlaybackTracker.clearPosition(_videoKey);
+      }
     }
+    setState(() {});
   }
 
   @override
   void dispose() {
     _controlsTimer?.cancel();
     _controller.removeListener(_onPlayerUpdate);
+    
+    if (_controller.value.isInitialized) {
+      final currentPos = _controller.value.position;
+      final totalDur = _controller.value.duration;
+      if (currentPos < totalDur - const Duration(seconds: 5)) {
+        PlaybackTracker.savePosition(_videoKey, currentPos.inSeconds);
+      } else {
+        PlaybackTracker.clearPosition(_videoKey);
+      }
+    }
+
     _controller.dispose();
     
     // Restore default orientation and System UI

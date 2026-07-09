@@ -1,4 +1,4 @@
-package com.antigravity.gdriveplayer.gdrive_player
+package com.sam.gdriveplayer
 
 import io.flutter.embedding.android.FlutterActivity
 
