@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'core/theme/app_theme.dart';
 import 'features/configuration/data/datasources/secure_storage_service.dart';
 import 'features/configuration/data/repositories/configuration_repository_impl.dart';
@@ -13,6 +14,7 @@ import 'features/dashboard/presentation/screens/dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false;
   await Firebase.initializeApp();
   final secureStorage = SecureStorageService();
   final configRepository = ConfigurationRepositoryImpl(secureStorage);

@@ -52,6 +52,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   int _lastSavedSecond = 0;
 
+  // Center Indicators and Audio/Subtitle tracks
+  String? _doubleTapFeedback;
+  Timer? _doubleTapFeedbackTimer;
+  String? _frameChangeText;
+  Timer? _frameChangeTimer;
+  String _selectedAudioTrack = 'Default Audio';
+  String _selectedSubtitleTrack = 'Subtitles Off';
+
   String get _videoKey {
     final regExp = RegExp(r'\/files\/([a-zA-Z0-9-_]+)');
     final match = regExp.firstMatch(widget.url);
@@ -183,6 +191,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void dispose() {
     _controlsTimer?.cancel();
+    _doubleTapFeedbackTimer?.cancel();
+    _frameChangeTimer?.cancel();
     _controller.removeListener(_onPlayerUpdate);
     
     if (_controller.value.isInitialized) {
@@ -330,16 +340,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _showFeedbackIndicator(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, textAlign: TextAlign.center),
-        duration: const Duration(milliseconds: 600),
-        behavior: SnackBarBehavior.floating,
-        width: 150,
-        backgroundColor: Colors.black87,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-    );
+    _doubleTapFeedbackTimer?.cancel();
+    setState(() {
+      _doubleTapFeedback = message;
+    });
+    _doubleTapFeedbackTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        setState(() {
+          _doubleTapFeedback = null;
+        });
+      }
+    });
   }
 
   Widget _buildAspectRatioWrapper(Widget child) {
@@ -528,6 +539,40 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               child: _buildSeekSwipeIndicator(),
             ),
 
+          // Double-Tap and Frame Change Center Indicators (No background, center text)
+          if (_doubleTapFeedback != null)
+            Center(
+              child: IgnorePointer(
+                child: Text(
+                  _doubleTapFeedback!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(blurRadius: 8, color: Colors.black87, offset: Offset(0, 2)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (_frameChangeText != null)
+            Center(
+              child: IgnorePointer(
+                child: Text(
+                  _frameChangeText!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(blurRadius: 10, color: Colors.black, offset: Offset(0, 2)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // 5. Player HUD Controls
           if (_showControls) _buildHUD(context),
         ],
@@ -636,6 +681,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   ),
                 ),
                 if (!_isLocked && _isInitialized) ...[
+                  // Audio Track selector
+                  _buildAudioTrackButton(),
+                  // Subtitles selector
+                  _buildSubtitlesButton(),
                   // Playback speed selector
                   _buildSpeedButton(),
                   // Aspect Ratio selector
@@ -797,6 +846,98 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
+  void _cycleAspectRatio() {
+    if (_isLocked || !_isInitialized) return;
+    
+    final nextIndex = (_aspectRatio.index + 1) % PlayerAspectRatio.values.length;
+    final nextRatio = PlayerAspectRatio.values[nextIndex];
+    
+    setState(() {
+      _aspectRatio = nextRatio;
+    });
+
+    String ratioLabel = '';
+    switch (nextRatio) {
+      case PlayerAspectRatio.original:
+        ratioLabel = 'Original';
+        break;
+      case PlayerAspectRatio.fit:
+        ratioLabel = 'Fit (Letterbox)';
+        break;
+      case PlayerAspectRatio.fill:
+        ratioLabel = 'Fill (Crop)';
+        break;
+      case PlayerAspectRatio.stretch:
+        ratioLabel = 'Stretch (Scale)';
+        break;
+      case PlayerAspectRatio.sixteenNine:
+        ratioLabel = '16:9';
+        break;
+      case PlayerAspectRatio.fourThree:
+        ratioLabel = '4:3';
+        break;
+    }
+
+    _showFrameChangeIndicator(ratioLabel);
+    _startControlsTimer();
+  }
+
+  void _showFrameChangeIndicator(String label) {
+    _frameChangeTimer?.cancel();
+    setState(() {
+      _frameChangeText = label;
+    });
+    _frameChangeTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() {
+          _frameChangeText = null;
+        });
+      }
+    });
+  }
+
+  Widget _buildAudioTrackButton() {
+    return PopupMenuButton<String>(
+      initialValue: _selectedAudioTrack,
+      icon: const Icon(Icons.audiotrack, color: Colors.white),
+      tooltip: 'Audio Track / Voice',
+      onSelected: (track) {
+        setState(() {
+          _selectedAudioTrack = track;
+        });
+        _showFrameChangeIndicator('Audio: $track');
+        _startControlsTimer();
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'Default Audio', child: Text('Default Audio')),
+        const PopupMenuItem(value: 'English [eng]', child: Text('English [eng]')),
+        const PopupMenuItem(value: 'Spanish [spa]', child: Text('Spanish [spa]')),
+        const PopupMenuItem(value: 'Hindi [hin]', child: Text('Hindi [hin]')),
+      ],
+    );
+  }
+
+  Widget _buildSubtitlesButton() {
+    return PopupMenuButton<String>(
+      initialValue: _selectedSubtitleTrack,
+      icon: const Icon(Icons.subtitles, color: Colors.white),
+      tooltip: 'Subtitles',
+      onSelected: (track) {
+        setState(() {
+          _selectedSubtitleTrack = track;
+        });
+        _showFrameChangeIndicator(track == 'Subtitles Off' ? 'Subtitles Disabled' : 'Subtitles: $track');
+        _startControlsTimer();
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'Subtitles Off', child: Text('Subtitles Off')),
+        const PopupMenuItem(value: 'English [eng]', child: Text('English [eng]')),
+        const PopupMenuItem(value: 'Spanish [spa]', child: Text('Spanish [spa]')),
+        const PopupMenuItem(value: 'French [fre]', child: Text('French [fre]')),
+      ],
+    );
+  }
+
   Widget _buildAspectRatioButton() {
     IconData icon;
     switch (_aspectRatio) {
@@ -820,24 +961,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         break;
     }
 
-    return PopupMenuButton<PlayerAspectRatio>(
-      initialValue: _aspectRatio,
+    return IconButton(
       icon: Icon(icon, color: Colors.white),
-      tooltip: 'Aspect Ratio',
-      onSelected: (ratio) {
-        setState(() {
-          _aspectRatio = ratio;
-        });
-        _startControlsTimer();
-      },
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: PlayerAspectRatio.original, child: Text('Original')),
-        const PopupMenuItem(value: PlayerAspectRatio.fit, child: Text('Fit (Letterbox)')),
-        const PopupMenuItem(value: PlayerAspectRatio.fill, child: Text('Fill (Crop)')),
-        const PopupMenuItem(value: PlayerAspectRatio.stretch, child: Text('Stretch (Scale)')),
-        const PopupMenuItem(value: PlayerAspectRatio.sixteenNine, child: Text('16:9')),
-        const PopupMenuItem(value: PlayerAspectRatio.fourThree, child: Text('4:3')),
-      ],
+      tooltip: 'Cycle Aspect Ratio',
+      onPressed: _cycleAspectRatio,
     );
   }
 }
