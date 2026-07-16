@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -79,10 +80,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     });
 
     try {
-      _controller = VideoPlayerController.networkUrl(
-        Uri.parse(widget.url),
-        httpHeaders: widget.headers,
-      );
+      if (widget.url.startsWith('http')) {
+        _controller = VideoPlayerController.networkUrl(
+          Uri.parse(widget.url),
+          httpHeaders: widget.headers,
+        );
+      } else {
+        _controller = VideoPlayerController.file(
+          File(widget.url),
+        );
+      }
 
       await _controller.initialize();
       _volume = _controller.value.volume;

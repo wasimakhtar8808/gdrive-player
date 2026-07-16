@@ -13,6 +13,7 @@ import 'features/dashboard/presentation/screens/dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   final secureStorage = SecureStorageService();
   final configRepository = ConfigurationRepositoryImpl(secureStorage);
 

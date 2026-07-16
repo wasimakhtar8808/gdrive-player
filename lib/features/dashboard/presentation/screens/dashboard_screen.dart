@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gdrive_player/features/drive/presentation/screens/drive_browser_screen.dart';
+import 'package:gdrive_player/features/drive/presentation/screens/local_video_browser_screen.dart';
 import 'package:gdrive_player/features/player/presentation/screens/live_stream_screen.dart';
 import 'package:gdrive_player/features/configuration/presentation/screens/settings_screen.dart';
 
@@ -9,12 +10,13 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         body: TabBarView(
           physics: NeverScrollableScrollPhysics(), // Prevent swipe switching to avoid conflict with players
           children: [
             DriveBrowserScreen(),
+            LocalVideoBrowserScreen(),
             LiveStreamScreen(),
             SettingsScreen(),
           ],
@@ -26,6 +28,10 @@ class DashboardScreen extends StatelessWidget {
               Tab(
                 icon: Icon(Icons.cloud_queue),
                 text: 'Drive',
+              ),
+              Tab(
+                icon: Icon(Icons.video_library),
+                text: 'Local',
               ),
               Tab(
                 icon: Icon(Icons.stream),

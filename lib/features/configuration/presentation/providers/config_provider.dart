@@ -156,19 +156,11 @@ class ConfigProvider with ChangeNotifier {
         serverClientId: _tokens.serverClientId,
       );
 
-      final GoogleSignInAccount? account = await GoogleSignIn.instance.authenticate();
-      if (account != null) {
-        await _handleGoogleSignInSuccess(account);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      } else {
-        _connectionStatus = ConnectionStatus.failed;
-        _errorMessage = 'Sign in cancelled by user.';
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      }
+      final GoogleSignInAccount account = await GoogleSignIn.instance.authenticate();
+      await _handleGoogleSignInSuccess(account);
+      _isLoading = false;
+      notifyListeners();
+      return true;
     } catch (e) {
       _connectionStatus = ConnectionStatus.failed;
       final errorStr = e.toString();

@@ -13,9 +13,18 @@ class ConfigurationRepositoryImpl implements ConfigurationRepository {
 
   @override
   Future<TokenEntity> loadTokens() async {
-    final apiKey = await _secureStorage.read(_keyApiKey) ?? '';
+    var apiKey = await _secureStorage.read(_keyApiKey) ?? '';
     final accessToken = await _secureStorage.read(_keyAccessToken) ?? '';
-    final serverClientId = await _secureStorage.read(_keyServerClientId) ?? '';
+    var serverClientId = await _secureStorage.read(_keyServerClientId) ?? '';
+    
+    // Fallbacks to default values if not configured in secure storage
+    if (apiKey.trim().isEmpty) {
+      apiKey = const TokenEntity.empty().apiKey;
+    }
+    if (serverClientId.trim().isEmpty) {
+      serverClientId = const TokenEntity.empty().serverClientId;
+    }
+    
     return TokenEntity(
       apiKey: apiKey,
       accessToken: accessToken,

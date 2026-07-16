@@ -4,7 +4,11 @@ class SecureStorageService {
   final FlutterSecureStorage _storage;
 
   SecureStorageService([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ?? const FlutterSecureStorage(
+          aOptions: AndroidOptions(
+            encryptedSharedPreferences: true,
+          ),
+        );
 
   Future<String?> read(String key) async {
     try {

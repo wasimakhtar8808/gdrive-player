@@ -1,31 +1,44 @@
 {
   "project_info": {
-    "project_number": "846250582150",
-    "project_id": "gdrive-player-a0861",
-    "storage_bucket": "gdrive-player-a0861.appspot.com"
+    "project_number": "728182534182",
+    "project_id": "gdrive-player-sam",
+    "storage_bucket": "gdrive-player-sam.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:846250582150:android:placeholder",
+        "mobilesdk_app_id": "1:728182534182:android:fc1a14e8549531cbdbb6e7",
         "android_client_info": {
           "package_name": "com.sam.gdriveplayer"
         }
       },
       "oauth_client": [
         {
-          "client_id": "846250582150-sstsfrien7oeh9fih3ackdtu55l1ehlp.apps.googleusercontent.com",
+          "client_id": "728182534182-793at4u2tghfvcpmuvleffoanoo0qs8t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sam.gdriveplayer",
+            "certificate_hash": "89c16a3fc541b98217c856e2ce5f4544e742e3be"
+          }
+        },
+        {
+          "client_id": "728182534182-2gsap6poc95l9l7mb3al4ivbhruseo4l.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "PLACEHOLDER"
+          "current_key": "AIzaSyCwEDejUR4FXG3KZAvTZ10Es7qYCIHp7d8"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "728182534182-2gsap6poc95l9l7mb3al4ivbhruseo4l.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
