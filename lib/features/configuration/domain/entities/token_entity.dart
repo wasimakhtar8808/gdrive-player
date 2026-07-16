@@ -27,7 +27,7 @@ class TokenEntity {
   }
 
   const TokenEntity.empty()
-      : apiKey = 'AIzaSyCwEDejUR4FXG3KZaVTZ10Es7qYCIHp7d8',
+      : apiKey = 'AIzaSyCwEDejUR4FXG3KZAvTZ10Es7qYCIHp7d8',
         accessToken = '',
         serverClientId = '728182534182-2gsap6poc95l9l7mb3al4ivbhruseo4l.apps.googleusercontent.com';
 }
