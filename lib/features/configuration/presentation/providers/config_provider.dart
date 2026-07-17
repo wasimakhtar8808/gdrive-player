@@ -34,14 +34,17 @@ class ConfigProvider with ChangeNotifier {
   Future<void> _init() async {
     _tokens = await _repository.loadTokens();
 
+    // Check if user is already logged in on boot to prevent triggering Google chooser
+    _firebaseUser = FirebaseAuth.instance.currentUser;
+
     // Listen to Firebase Auth state changes
     FirebaseAuth.instance.authStateChanges().listen((user) {
       _firebaseUser = user;
       notifyListeners();
     });
 
-    // If client ID is already saved, silently authenticate to recover session
-    if (_tokens.hasClientId) {
+    // If client ID is already saved and no active user session exists, silently restore
+    if (_tokens.hasClientId && _firebaseUser == null) {
       try {
         await GoogleSignIn.instance.initialize(
           clientId: kIsWeb ? _tokens.serverClientId : null,

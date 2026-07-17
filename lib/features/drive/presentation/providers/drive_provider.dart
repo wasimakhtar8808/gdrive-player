@@ -181,8 +181,7 @@ class DriveProvider with ChangeNotifier {
     String url;
 
     if (token.hasAccessToken) {
-      headers['Authorization'] = 'Bearer ${token.accessToken}';
-      url = 'https://www.googleapis.com/drive/v3/files/${item.id}?alt=media';
+      url = 'https://www.googleapis.com/drive/v3/files/${item.id}?alt=media&access_token=${token.accessToken}';
     } else {
       url = 'https://www.googleapis.com/drive/v3/files/${item.id}?alt=media&key=${token.apiKey}';
     }

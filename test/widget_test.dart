@@ -1,30 +1,26 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:gdrive_player/main.dart';
+import 'package:gdrive_player/features/configuration/domain/entities/token_entity.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('TokenEntity Tests', () {
+    test('Default TokenEntity initialization values', () {
+      const entity = TokenEntity.empty();
+      expect(entity.apiKey, 'AIzaSyCwEDejUR4FXG3KZAvTZ10Es7qYCIHp7d8');
+      expect(entity.accessToken, isEmpty);
+      expect(entity.serverClientId, '728182534182-2gsap6poc95l9l7mb3al4ivbhruseo4l.apps.googleusercontent.com');
+      expect(entity.hasClientId, isTrue);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('Custom TokenEntity initialization values', () {
+      const entity = TokenEntity(
+        apiKey: 'test-api-key',
+        accessToken: 'test-access-token',
+        serverClientId: 'test-client-id',
+      );
+      expect(entity.apiKey, 'test-api-key');
+      expect(entity.accessToken, 'test-access-token');
+      expect(entity.serverClientId, 'test-client-id');
+      expect(entity.hasClientId, isTrue);
+    });
   });
 }
